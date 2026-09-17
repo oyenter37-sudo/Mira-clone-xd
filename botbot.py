@@ -31,6 +31,27 @@ import traceback
 
 import requests
 
+
+def _load_env_file(path: str = "") -> None:
+    """Читает .env, лежащий рядом с botbot.py, если есть.
+    Не требует python-dotenv. Реальные переменные окружения имеют приоритет."""
+    p = path or os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+    try:
+        with open(p, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                k, _, v = line.partition("=")
+                k, v = k.strip(), v.strip().strip('"').strip("'")
+                if k and k not in os.environ:
+                    os.environ[k] = v
+    except OSError:
+        pass  # файла нет — ок, берём из окружения/дефолтов
+
+
+_load_env_file()
+
 # ============================ НАСТРОЙКИ ============================
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
