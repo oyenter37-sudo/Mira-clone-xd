@@ -50,11 +50,28 @@ def _load_env_file(path: str = "") -> None:
         pass  # файла нет — ок, берём из окружения/дефолтов
 
 
-_load_env_file()
+# .env ищем и рядом со скриптом, и в текущей папке (где хостинг запускает команду)
+_seen_env = set()
+for _p in (os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"),
+           os.path.join(os.getcwd(), ".env")):
+    if _p not in _seen_env:
+        _seen_env.add(_p)
+        _load_env_file(_p)
 
 # ============================ НАСТРОЙКИ ============================
 
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+
+def _env_token() -> str:
+    """Токен принимаем под несколькими именами (хостинги любят разные),
+    и срезаем случайные кавычки, если юзер вставил значение вместе с ними."""
+    for name in ("TELEGRAM_BOT_TOKEN", "BOT_TOKEN", "TG_TOKEN", "TELEGRAM_TOKEN"):
+        v = os.getenv(name, "").strip().strip('"').strip("'")
+        if v:
+            return v
+    return ""
+
+
+TELEGRAM_BOT_TOKEN = _env_token()
 CRAX_API_BASE = os.getenv("CRAX_API_BASE", "https://gpt.crax.lol").rstrip("/")
 CRAX_API_KEY = os.getenv(
     "CRAX_API_KEY",
@@ -500,9 +517,24 @@ def selftest():
 def main():
     global BOT_USERNAME
     if not TELEGRAM_BOT_TOKEN:
-        print('❌ Не задан токен. Получи у @BotFather и запусти так:\n'
-              '   export TELEGRAM_BOT_TOKEN="123456:ABC..."\n'
-              '   python botbot.py')
+        checked = "TELEGRAM_BOT_TOKEN / BOT_TOKEN / TG_TOKEN / TELEGRAM_TOKEN"
+        print("❌ Токен не найден: ни одна из переменных " + checked + " не задана.")
+        suspicious = sorted(
+            k for k in os.environ
+            if any(w in k.upper() for w in ("TOKEN", "BOT", "TELEGRAM", "TG_"))
+        )[:15]
+        if suspicious:
+            print("   В окружении есть похожие (значения скрыты):", ", ".join(suspicious))
+            print("   → Похоже, переменная называется иначе. Переименуй в TELEGRAM_BOT_TOKEN")
+            print("     или используй одно из имён выше.")
+        else:
+            print("   В окружении НЕТ ни одной переменной про токен/бота —")
+            print("   платформа не пробросила env в процесс. Что делать:")
+            print("     1) после добавления переменных сделай Redeploy/Restart приложения")
+            print("     2) проверь имя: ровно TELEGRAM_BOT_TOKEN, латиницей, без пробелов")
+            print("     3) не добавляй слово export и кавычки в поле имени переменной")
+            print("     4) либо положи файл .env рядом с botbot.py со строкой:")
+            print("        TELEGRAM_BOT_TOKEN=твой_токен")
         sys.exit(1)
     me = tg("getMe")
     BOT_USERNAME = me["username"]
